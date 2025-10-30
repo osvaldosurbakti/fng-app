@@ -32,5 +32,73 @@
       "receiptNumber": "RCP-1761757435608",
       "updatedAt": "2025-10-29T17:04:15.398Z"
     }
+  },
+  {
+    "_id": "1761818455414",
+    "customer": "",
+    "notes": "",
+    "items": [
+      {
+        "product": "Dumpling Keju (3 pcs)",
+        "quantity": 1,
+        "price": 6000,
+        "category": "makanan",
+        "temperature": "",
+        "notes": "",
+        "itemTotal": 6000
+      }
+    ],
+    "totalAmount": 6000,
+    "itemCount": 1,
+    "invoice_number": "INV-455408",
+    "payment_status": "paid",
+    "payment_method": "cash",
+    "sale_date": "2025-10-30T10:00:55.408Z",
+    "cashier": "System",
+    "createdAt": "2025-10-30T10:00:55.408Z",
+    "updatedAt": "2025-10-30T10:00:55.408Z",
+    "payment": {
+      "method": "CASH",
+      "status": "UNPAID",
+      "amountPaid": 0,
+      "remainingAmount": 6000,
+      "proofImage": null,
+      "receiptNumber": "RCP-1761818454481",
+      "updatedAt": "2025-10-30T10:00:55.408Z"
+    }
+  },
+  {
+    "_id": "1761818504928",
+    "customer": "",
+    "notes": "",
+    "items": [
+      {
+        "product": "Bakso Bakar (3 pcs)",
+        "quantity": 1,
+        "price": 3000,
+        "category": "makanan",
+        "temperature": "",
+        "notes": "",
+        "itemTotal": 3000
+      }
+    ],
+    "totalAmount": 3000,
+    "itemCount": 1,
+    "invoice_number": "INV-504922",
+    "payment_status": "paid",
+    "payment_method": "cash",
+    "sale_date": "2025-10-30T10:01:44.922Z",
+    "cashier": "System",
+    "createdAt": "2025-10-30T10:01:44.922Z",
+    "updatedAt": "2025-10-30T10:01:44.922Z",
+    "payment": {
+      "method": "CASH",
+      "status": "UNPAID",
+      "amountPaid": 0,
+      "remainingAmount": 3000,
+      "proofImage": null,
+      "receiptNumber": "RCP-1761818503708",
+      "updatedAt": "2025-10-30T10:01:44.922Z"
+    }
   }
 ]

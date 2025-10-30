@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMongoClient, checkConnection } from '@/lib/mongodb'
-import { readSalesFromFile, addSaleToFile, FileSale } from '@/lib/file-storage'
+import { MongoClient, ObjectId } from 'mongodb'
 
-const USE_FILE_STORAGE = process.env.USE_FILE_STORAGE === 'true' || process.env.NODE_ENV === 'development'
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017'
+const DB_NAME = process.env.DB_NAME || 'fng-app'
+
+let client: MongoClient
+let isConnected = false
+
+async function getMongoClient() {
+  if (!client || !isConnected) {
+    client = new MongoClient(MONGODB_URI)
+    await client.connect()
+    isConnected = true
+    console.log('✅ Connected to MongoDB')
+  }
+  return client
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +23,7 @@ export async function POST(request: NextRequest) {
     
     console.log('📨 Received data:', body)
 
-    // Validasi untuk multiple items
+    // Validasi data
     if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json({ 
         success: false, 
@@ -47,16 +60,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Hitung total amount dari semua items
+    // Hitung total amount
     const totalAmount = body.items.reduce((total: number, item: any) => {
       return total + (parseFloat(item.price) * parseInt(item.quantity))
     }, 0)
 
     console.log('🧮 Calculated total amount:', totalAmount)
 
-    // Data untuk disimpan
+    // Data untuk disimpan ke MongoDB
     const saleData = {
-      customer: body.customer?.toString().trim() || '',
+      customer: body.customer?.toString().trim() || 'Walk-in Customer',
       notes: body.notes?.toString().trim() || '',
       items: body.items.map((item: any) => ({
         product: item.product.toString().trim(),
@@ -69,50 +82,30 @@ export async function POST(request: NextRequest) {
       })),
       totalAmount: totalAmount,
       itemCount: body.items.length,
-      invoice_number: `INV-${Date.now().toString().slice(-6)}`,
-      payment_status: 'paid',
-      payment_method: 'cash',
+      invoice_number: `INV-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substr(2, 5)}`,
+      payment_status: body.payment?.status || 'PAID',
+      payment_method: body.payment?.method || 'CASH',
       sale_date: new Date().toISOString(),
       cashier: 'System',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
       payment: {
         method: body.payment?.method || 'CASH',
-        status: body.payment?.status || 'UNPAID',
-        amountPaid: parseFloat(body.payment?.amountPaid || 0),
-        remainingAmount: totalAmount - (parseFloat(body.payment?.amountPaid || 0)),
+        status: body.payment?.status || 'PAID',
+        amountPaid: parseFloat(body.payment?.amountPaid || totalAmount),
+        remainingAmount: totalAmount - (parseFloat(body.payment?.amountPaid || totalAmount)),
         proofImage: body.payment?.proofImage || null,
         receiptNumber: body.payment?.receiptNumber || `RCP-${Date.now().toString().slice(-6)}`,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       }
     }
 
-    console.log('💾 Saving sale data:', saleData)
+    console.log('💾 Saving to MongoDB...')
 
-    let result;
-
-    if (USE_FILE_STORAGE) {
-      // Gunakan file storage
-      console.log('📁 Using file storage for development')
-      const savedSale = await addSaleToFile(saleData as any)
-      result = { insertedId: savedSale._id }
-    } else {
-      // Coba MongoDB dulu, fallback ke file storage
-      try {
-        const isConnected = await checkConnection()
-        if (!isConnected) {
-          throw new Error('MongoDB not connected')
-        }
-
-        const client = await getMongoClient()
-        const db = client.db('fng-app')
-        result = await db.collection('sales').insertOne(saleData)
-      } catch (mongoError) {
-        console.warn('MongoDB failed, using file storage:', mongoError)
-        const savedSale = await addSaleToFile(saleData as any)
-        result = { insertedId: savedSale._id }
-      }
-    }
+    // Simpan ke MongoDB
+    const client = await getMongoClient()
+    const db = client.db(DB_NAME)
+    const result = await db.collection('sales').insertOne(saleData)
 
     console.log('✅ Sale created successfully. ID:', result.insertedId)
 
@@ -134,35 +127,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET method untuk mengambil data sales
 export async function GET() {
   try {
-    let salesData;
-
-    if (USE_FILE_STORAGE) {
-      // Gunakan file storage
-      console.log('📁 Using file storage for development')
-      salesData = await readSalesFromFile()
-    } else {
-      // Coba MongoDB dulu, fallback ke file storage
-      try {
-        const isConnected = await checkConnection()
-        if (!isConnected) {
-          throw new Error('MongoDB not connected')
-        }
-
-        const client = await getMongoClient()
-        const db = client.db('fng-app')
-        salesData = await db.collection('sales')
-          .find({})
-          .sort({ createdAt: -1 })
-          .toArray()
-      } catch (mongoError) {
-        console.warn('MongoDB failed, using file storage:', mongoError)
-        salesData = await readSalesFromFile()
-      }
-    }
+    const client = await getMongoClient()
+    const db = client.db(DB_NAME)
     
+    const salesData = await db.collection('sales')
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray()
+
     return NextResponse.json({ 
       success: true, 
       data: salesData 

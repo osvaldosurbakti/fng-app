@@ -15,37 +15,31 @@ export default function CreateSalePage() {
     customer: '',
     notes: ''
   })
-  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null)
 
-  // Tambah item ke pesanan
   const handleAddItem = (newItem: Omit<OrderItem, "id">) => {
     const item: OrderItem = {
       id: Date.now().toString(),
       ...newItem
-    };
-    setOrderItems([...orderItems, item]);
-  };
+    }
+    setOrderItems([...orderItems, item])
+  }
 
-  // Hapus item dari pesanan
   const handleRemoveItem = (id: string) => {
-    setOrderItems(orderItems.filter(item => item.id !== id));
-  };
+    setOrderItems(orderItems.filter(item => item.id !== id))
+  }
 
-  // Update quantity item
   const handleUpdateQuantity = (id: string, quantity: number) => {
-    if (quantity < 1) return;
-    
+    if (quantity < 1) return
     setOrderItems(orderItems.map(item => 
       item.id === id ? { ...item, quantity } : item
-    ));
-  };
+    ))
+  }
 
-  // Hitung total
   const calculateTotal = () => {
     return orderItems.reduce((total, item) => total + (item.price * item.quantity), 0)
   }
 
-  // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -57,9 +51,14 @@ export default function CreateSalePage() {
         return
       }
 
-      // Format data untuk API
+      if (!paymentDetails) {
+        alert('Silakan lengkapi informasi pembayaran!')
+        setLoading(false)
+        return
+      }
+
       const saleData = {
-        customer: formData.customer.trim(),
+        customer: formData.customer.trim() || 'Walk-in Customer',
         notes: formData.notes.trim(),
         items: orderItems.map(item => ({
           product: item.menu + (item.temperature ? ` (${item.temperature})` : ''),
@@ -104,10 +103,8 @@ export default function CreateSalePage() {
 
   const resetForm = () => {
     setOrderItems([])
-    setFormData({
-      customer: '',
-      notes: ''
-    })
+    setFormData({ customer: '', notes: '' })
+    setPaymentDetails(null)
   }
 
   return (
