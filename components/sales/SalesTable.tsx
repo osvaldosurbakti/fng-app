@@ -1,6 +1,6 @@
 import { Sale, PaymentMethod, PaymentStatus } from '@/types/sales';
 import { Eye, Edit, Trash2 } from "lucide-react";
-import { formatCurrency, formatDate, getPaymentMethodText, getStatusColor, getProductName } from "./utils";
+import { getPaymentMethodText, getPaymentStatusText, getStatusColor, getPaymentMethodColor } from '@/utils/sales';
 
 interface SalesTableProps {
   sales: Sale[];
@@ -36,19 +36,14 @@ export default function SalesTable({ sales, onViewDetail, onEdit, onDelete }: Sa
                 <div className="flex flex-col">
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
                     ${getPaymentMethodColor(sale.payment.method)}`}>
-                    {getPaymentMethodLabel(sale.payment.method)}
+                    {getPaymentMethodText(sale.payment.method)} {/* Pakai dari utils */}
                   </span>
-                  {sale.payment.status === 'PARTIAL' && (
-                    <span className="text-xs text-gray-500 mt-1">
-                      Dibayar: Rp {sale.payment.amountPaid.toLocaleString()}
-                    </span>
-                  )}
                 </div>
               </td>
               <td className="px-4 py-3">
                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
-                  ${getPaymentStatusColor(sale.payment.status)}`}>
-                  {getPaymentStatusLabel(sale.payment.status)}
+                  ${getStatusColor(sale.payment.status)}`}> {/* Pakai dari utils */}
+                  {getPaymentStatusText(sale.payment.status)} {/* Pakai dari utils */}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm text-gray-500">
@@ -83,40 +78,4 @@ export default function SalesTable({ sales, onViewDetail, onEdit, onDelete }: Sa
       </table>
     </div>
   );
-}
-
-function getPaymentMethodColor(method: PaymentMethod) {
-  switch (method) {
-    case 'CASH': return 'bg-green-100 text-green-800';
-    case 'QRIS': return 'bg-blue-100 text-blue-800';
-    case 'TRANSFER': return 'bg-purple-100 text-purple-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-}
-
-function getPaymentMethodLabel(method: PaymentMethod) {
-  switch (method) {
-    case 'CASH': return '💵 Tunai';
-    case 'QRIS': return '📱 QRIS';
-    case 'TRANSFER': return '🏦 Transfer';
-    default: return method;
-  }
-}
-
-function getPaymentStatusColor(status: PaymentStatus) {
-  switch (status) {
-    case 'PAID': return 'bg-green-100 text-green-800';
-    case 'PARTIAL': return 'bg-yellow-100 text-yellow-800';
-    case 'UNPAID': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-}
-
-function getPaymentStatusLabel(status: PaymentStatus) {
-  switch (status) {
-    case 'PAID': return '✅ Lunas';
-    case 'PARTIAL': return '⏳ Sebagian';
-    case 'UNPAID': return '❌ Belum Bayar';
-    default: return status;
-  }
 }

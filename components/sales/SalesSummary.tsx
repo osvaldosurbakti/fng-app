@@ -7,7 +7,7 @@ interface SalesSummaryProps {
 export default function SalesSummary({ sales }: SalesSummaryProps) {
   const totalSales = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
   const totalTransactions = sales.length;
-  const paidTransactions = sales.filter(sale => sale.payment_status === 'paid').length;
+  const paidTransactions = sales.filter(sale => sale.payment_status === 'PAID').length;
   const totalItems = sales.reduce((sum, sale) => {
     return sum + (sale.items?.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0) || 0);
   }, 0);

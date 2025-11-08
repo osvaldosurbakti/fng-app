@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const totalRevenue = sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
   const pendingPayments = sales.filter(s => {
     const status = s.payment?.status || s.payment_status || (s.payment_status as any);
-    return status !== "PAID" && status !== "paid";
+    return status !== "PAID";
   }).length;
   const totalSalesToday = sales.filter(s => {
     const date = (s.sale_date || s.createdAt || "").toString();

@@ -1,6 +1,6 @@
-import { Sale } from "@/types/sales";
 import { X, AlertTriangle } from "lucide-react";
-import { formatCurrency, formatDate } from "./utils";
+import { formatCurrency, formatDate } from "@/utils/sales";
+import { Sale } from "@/types/sales";
 
 interface DeleteConfirmationModalProps {
   sale: Sale | null;

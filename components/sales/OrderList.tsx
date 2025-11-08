@@ -1,9 +1,10 @@
-import { OrderItem } from "./types";
+import { OrderItem } from '@/types/sales';
 
 interface OrderListProps {
   items: OrderItem[];
   onRemoveItem: (id: string) => void;
   onUpdateQuantity: (id: string, quantity: number) => void;
+    showActions?: boolean; // ✅ Tambahkan ini
 }
 
 export default function OrderList({ items, onRemoveItem, onUpdateQuantity }: OrderListProps) {

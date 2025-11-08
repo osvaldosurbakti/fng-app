@@ -1,8 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Sale } from "@/types/sales";
-import { Payment, PaymentStatus } from "@/types/sales";
+import { Sale, PaymentMethod, PaymentStatus } from "@/types/sales";
 
 // Import komponen
 import SalesTable from "@/components/sales/SalesTable";
@@ -42,55 +41,62 @@ export default function SalesListPage() {
   const fetchSales = async () => {
     try {
       setLoading(true);
+      setError("");
       const response = await fetch('/api/sales');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const result = await response.json();
       
       if (result.success) {
         const validatedSales = result.data.map((sale: any) => ({
-          _id: sale._id || sale.id,
+          _id: sale._id || sale.id || `temp-${Date.now()}-${Math.random()}`,
+          id: sale.id || sale._id,
           customer: sale.customer || sale.customer_name || "Tanpa Nama",
           customer_name: sale.customer_name || sale.customer || "Tanpa Nama",
           customer_phone: sale.customer_phone || "",
           customer_notes: sale.customer_notes || "",
           notes: sale.notes || "",
-          items: sale.items || (sale.product ? [{
-            product: sale.product,
-            menu: sale.product, // Untuk kompatibilitas
-            quantity: sale.quantity || 1,
-            price: sale.price || 0,
-            category: sale.category || "",
-            temperature: sale.temperature || "",
-            notes: sale.notes || "",
-            itemTotal: sale.totalAmount || (sale.price || 0) * (sale.quantity || 1)
-          }] : []),
-          totalAmount: sale.totalAmount || sale.total || (sale.price || 0) * (sale.quantity || 0),
-          total: sale.total || sale.totalAmount || (sale.price || 0) * (sale.quantity || 0),
-          itemCount: sale.itemCount || (sale.items ? sale.items.length : 1),
-          invoice_number: sale.invoice_number || `INV-${(sale._id || sale.id)?.slice(-6).toUpperCase()}`,
-          payment_status: sale.payment_status || 'paid',
-          payment_method: sale.payment_method || 'cash',
+          items: Array.isArray(sale.items) ? sale.items.map((item: any) => ({
+            product: item.product || item.menu || "Unknown Product",
+            menu: item.menu || item.product || "Unknown Product",
+            quantity: Number(item.quantity) || 1,
+            price: Number(item.price) || 0,
+            category: item.category || "",
+            temperature: item.temperature || "",
+            notes: item.notes || "",
+            itemTotal: Number(item.itemTotal) || (Number(item.price) || 0) * (Number(item.quantity) || 1)
+          })) : [],
+          totalAmount: Number(sale.totalAmount) || Number(sale.total) || 0,
+          total: Number(sale.total) || Number(sale.totalAmount) || 0,
+          itemCount: Number(sale.itemCount) || (Array.isArray(sale.items) ? sale.items.length : 0),
+          invoice_number: sale.invoice_number || `INV-${(sale._id || sale.id)?.toString().slice(-6).toUpperCase()}`,
+          payment_status: (sale.payment_status || 'UNPAID').toUpperCase() as PaymentStatus,
+          payment_method: (sale.payment_method || 'CASH').toUpperCase() as PaymentMethod,
           sale_date: sale.sale_date || sale.createdAt,
           cashier: sale.cashier || 'System',
-          createdAt: sale.createdAt,
-          updatedAt: sale.updatedAt,
+          createdAt: sale.createdAt || new Date().toISOString(),
+          updatedAt: sale.updatedAt || new Date().toISOString(),
           payment: {
-            method: sale.payment?.method || 'CASH',
-            status: sale.payment?.status || 'UNPAID',
-            amountPaid: sale.payment?.amountPaid || 0,
-            remainingAmount: sale.payment?.remainingAmount || sale.totalAmount || 0,
+            method: (sale.payment?.method || sale.payment_method || 'CASH').toUpperCase() as PaymentMethod,
+            status: (sale.payment?.status || sale.payment_status || 'UNPAID').toUpperCase() as PaymentStatus,
+            amountPaid: Number(sale.payment?.amountPaid) || 0,
+            remainingAmount: Number(sale.payment?.remainingAmount) || (Number(sale.totalAmount) || 0) - (Number(sale.payment?.amountPaid) || 0),
             proofImage: sale.payment?.proofImage || null,
-            receiptNumber: sale.payment?.receiptNumber || `RCP-${(sale._id || sale.id)?.slice(-6)}`,
-            updatedAt: sale.payment?.updatedAt || sale.updatedAt
+            receiptNumber: sale.payment?.receiptNumber || `RCP-${(sale._id || sale.id)?.toString().slice(-6)}`,
+            updatedAt: sale.payment?.updatedAt || sale.updatedAt || new Date().toISOString()
           }
         }));
         
         setSales(validatedSales);
       } else {
-        setError(result.message || "Gagal memuat data penjualan");
+        throw new Error(result.message || "Gagal memuat data penjualan");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching sales:", error);
-      setError("Terjadi kesalahan saat memuat data");
+      setError(error.message || "Terjadi kesalahan saat memuat data");
     } finally {
       setLoading(false);
     }
@@ -100,9 +106,12 @@ export default function SalesListPage() {
   const filteredSales = sales.filter((sale) => {
     const matchesSearch = 
       sale.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase());
+      sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.payment?.receiptNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" || sale.payment_status === statusFilter;
+    const matchesStatus = statusFilter === "all" || 
+      sale.payment_status === statusFilter ||
+      sale.payment?.status === statusFilter;
     
     const matchesDate = !dateFilter || 
       (sale.sale_date && sale.sale_date.startsWith(dateFilter)) ||
@@ -139,34 +148,31 @@ export default function SalesListPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (selectedSale) {
-      try {
-        // PERBAIKAN: Gunakan route [id] bukan query parameter
-        const response = await fetch(`/api/sales/${selectedSale._id}`, {
-          method: 'DELETE',
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          // Refresh data setelah delete
-          fetchSales();
-          setShowDeleteModal(false);
-          setSelectedSale(null);
-          alert('Penjualan berhasil dihapus!');
-        } else {
-          throw new Error(result.message || 'Gagal menghapus penjualan');
-        }
-      } catch (error: any) {
-        console.error('Error deleting sale:', error);
-        alert(error.message || 'Terjadi kesalahan saat menghapus penjualan');
+    if (!selectedSale) return;
+
+    try {
+      const response = await fetch(`/api/sales/${selectedSale._id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        fetchSales();
+        setShowDeleteModal(false);
+        setSelectedSale(null);
+        alert('Penjualan berhasil dihapus!');
+      } else {
+        throw new Error(result.message || 'Gagal menghapus penjualan');
       }
+    } catch (error: any) {
+      console.error('Error deleting sale:', error);
+      alert(error.message || 'Terjadi kesalahan saat menghapus penjualan');
     }
   };
 
   const handleSaveEdit = async (updatedSale: Sale) => {
     try {
-      // PERBAIKAN: Implement update API call dengan PUT method
       const response = await fetch(`/api/sales/${updatedSale._id}`, {
         method: 'PUT',
         headers: {
@@ -191,12 +197,12 @@ export default function SalesListPage() {
     }
   };
 
-  // Mark selected sale as paid (update payment)
+  // Mark selected sale as paid
   const handleMarkAsPaid = async (sale: Sale | null) => {
     if (!sale) return;
-    // already paid?
-    const currentStatus = sale.payment?.status || sale.payment_status || '';
-    if (currentStatus === 'PAID' || currentStatus === 'paid') {
+    
+    const currentStatus = sale.payment?.status || sale.payment_status;
+    if (currentStatus === 'PAID') {
       alert('Pembayaran sudah lunas.');
       return;
     }
@@ -205,35 +211,41 @@ export default function SalesListPage() {
 
     try {
       setUpdatingPayment(true);
-      const updatedPayment: Payment = {
-        method: (sale.payment?.method || sale.payment_method || 'CASH') as any,
+      const totalAmount = sale.totalAmount || 0;
+      
+      const updatedPayment = {
+        method: (sale.payment?.method || sale.payment_method || 'CASH') as PaymentMethod,
         status: 'PAID' as PaymentStatus,
-        amountPaid: sale.totalAmount || 0,
+        amountPaid: totalAmount,
         remainingAmount: 0,
-        proofImage: sale.payment?.proofImage,
-        receiptNumber: sale.payment?.receiptNumber || `RCP-${(sale._id || '').toString().slice(-6)}`,
+        receiptNumber: sale.payment?.receiptNumber || `RCP-${sale._id.toString().slice(-6)}`,
         updatedAt: new Date().toISOString()
       };
 
-      const payload: any = {
+      const payload = {
         payment: updatedPayment,
-        payment_status: 'PAID'
+        payment_status: 'PAID' as PaymentStatus
       };
 
-      const res = await fetch(`/api/sales/${sale._id}`, {
+      const response = await fetch(`/api/sales/${sale._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      const result = await res.json();
-      if (!res.ok || !result.success) {
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
         throw new Error(result.message || 'Gagal memperbarui pembayaran');
       }
 
-      // refresh data & selectedSale
       await fetchSales();
-      setSelectedSale(prev => prev ? ({ ...prev, payment: updatedPayment, payment_status: 'PAID' } as Sale) : prev);
+      setSelectedSale(prev => prev ? { 
+        ...prev, 
+        payment: updatedPayment, 
+        payment_status: 'PAID' 
+      } : null);
+      
       alert('Pembayaran berhasil ditandai LUNAS.');
     } catch (err: any) {
       console.error('Error marking as paid:', err);
@@ -259,14 +271,18 @@ export default function SalesListPage() {
     setCurrentPage(1);
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="min-h-screen bg-gray-50 p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Data Penjualan</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Data Penjualan</h1>
+            <div className="animate-pulse bg-gray-200 h-4 w-48 mt-2 rounded"></div>
+          </div>
           <div className="animate-pulse bg-gray-300 h-10 w-40 rounded"></div>
         </div>
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data penjualan...</p>
         </div>
@@ -274,86 +290,104 @@ export default function SalesListPage() {
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <div className="p-6">
+      <div className="min-h-screen bg-gray-50 p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Data Penjualan</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Data Penjualan</h1>
           <button
             onClick={handleRefresh}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Refresh
           </button>
         </div>
-        <div className="text-center py-8 text-red-600">
-          <p>{error}</p>
-          <button
-            onClick={handleRefresh}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            Coba Lagi
-          </button>
+        <div className="text-center py-12">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+            <div className="text-red-600 text-4xl mb-4">⚠️</div>
+            <h3 className="text-red-800 font-semibold mb-2">Gagal Memuat Data</h3>
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Coba Lagi
+            </button>
+          </div>
         </div>
       </div>
     );
   }
-
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Data Penjualan</h1>
-          <p className="text-gray-600 mt-1">
-            Total {filteredSales.length} transaksi penjualan
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6">
+        <div className="mb-3 sm:mb-0">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">
+            Data Penjualan
+          </h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">
+            Total {filteredSales.length} transaksi
           </p>
         </div>
-        <div className="flex gap-3 mt-4 lg:mt-0">
+        <div className="flex gap-2 sm:gap-3">
           <button
             onClick={handleRefresh}
-            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 flex items-center"
+            className="text-xs sm:text-sm bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
           >
-            🔄 Refresh
+            <span className="text-xs">🔄</span>
+            Refresh
           </button>
           <Link
             href="/dashboard/sales/create"
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md flex items-center transition-colors"
+            className="text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center gap-1 transition-colors"
           >
-            + Input Penjualan Baru
+            <span className="text-xs">+</span>
+            Input Baru
           </Link>
         </div>
       </div>
 
-      {/* Filters */}
-      <SalesFilters
-        searchTerm={searchTerm}
-        onSearchChange={handleSearchChange}
-        statusFilter={statusFilter}
-        onStatusFilterChange={handleStatusFilterChange}
-        dateFilter={dateFilter}
-        onDateFilterChange={handleDateFilterChange}
-      />
-
-      {/* Sales Table */}
-      <SalesTable
-        sales={paginatedSales}
-        onViewDetail={handleViewDetail}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
+      {/* Filters - Mobile Optimized */}
+      <div className="mb-4 lg:mb-6">
+        <SalesFilters
+          searchTerm={searchTerm}
+          onSearchChange={handleSearchChange}
+          statusFilter={statusFilter}
+          onStatusFilterChange={handleStatusFilterChange}
+          dateFilter={dateFilter}
+          onDateFilterChange={handleDateFilterChange}
         />
+      </div>
+
+      {/* Sales Table with Mobile Overflow */}
+      <div className="mb-4 lg:mb-6">
+        <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
+          <SalesTable
+            sales={paginatedSales}
+            onViewDetail={handleViewDetail}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        </div>
+      </div>
+
+      {/* Pagination - Mobile Friendly */}
+      {totalPages > 1 && (
+        <div className="mb-4 lg:mb-6">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       )}
 
-      {/* Summary */}
-      <SalesSummary sales={filteredSales} />
+      {/* Summary - Compact on Mobile */}
+      <div className="mb-4 lg:mb-6">
+        <SalesSummary sales={filteredSales} />
+      </div>
 
       {/* Modals */}
       <SaleDetailModal
@@ -376,24 +410,53 @@ export default function SalesListPage() {
         onSave={handleSaveEdit}
       />
 
-      {/* Floating Mark-as-Paid button (visible saat ada selectedSale yang belum lunas) */}
-      {selectedSale && (selectedSale.payment?.status !== 'PAID' && selectedSale.payment?.status !== 'paid') && (
-        <div className="fixed bottom-6 right-6 z-60">
+      {/* Floating Mark-as-Paid button - Mobile Optimized */}
+      {selectedSale && (selectedSale.payment?.status !== 'PAID' && selectedSale.payment_status !== 'PAID') && (
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
           <button
             onClick={() => handleMarkAsPaid(selectedSale)}
             disabled={updatingPayment}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 disabled:opacity-60"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 sm:px-6 sm:py-3 rounded-lg shadow-lg flex items-center gap-2 disabled:opacity-50 transition-all transform hover:scale-105 text-sm sm:text-base"
             title="Tandai sebagai Lunas"
           >
             {updatingPayment ? (
               <span className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                Memproses...
+                <span className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white"></span>
+                <span className="hidden sm:inline">Memproses...</span>
+                <span className="sm:hidden">...</span>
               </span>
             ) : (
-              <>✅ Tandai Lunas</>
+              <>
+                <span className="text-sm">✅</span>
+                <span className="hidden sm:inline">Tandai Lunas</span>
+                <span className="sm:hidden">Lunas</span>
+              </>
             )}
           </button>
+        </div>
+      )}
+
+      {/* Empty State - Mobile Optimized */}
+      {filteredSales.length === 0 && !loading && (
+        <div className="text-center py-8 sm:py-12 bg-white rounded-xl shadow-sm">
+          <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">📊</div>
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
+            Tidak ada data penjualan
+          </h3>
+          <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base px-4">
+            {sales.length === 0 
+              ? "Belum ada transaksi penjualan yang tercatat." 
+              : "Tidak ada transaksi yang sesuai dengan filter yang dipilih."}
+          </p>
+          {sales.length === 0 && (
+            <Link
+              href="/dashboard/sales/create"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-lg inline-flex items-center gap-2 transition-colors text-sm sm:text-base"
+            >
+              <span>+</span>
+              Buat Penjualan Pertama
+            </Link>
+          )}
         </div>
       )}
     </div>

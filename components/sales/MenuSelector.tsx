@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { OrderItem } from "./types";
+import { OrderItem } from "@/types/sales";
 import { getMenuByCategory } from "@/data/menuData";
 
 interface MenuSelectorProps {

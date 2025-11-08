@@ -4,7 +4,7 @@ interface Sale {
   customer_name: string;
   amount: number;
   date: string;
-  status: 'paid' | 'pending';
+  status: 'PAID' | 'pending';
 }
 
 interface RecentSalesProps {
