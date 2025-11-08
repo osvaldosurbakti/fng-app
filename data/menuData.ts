@@ -1,6 +1,4 @@
-import { MenuItem } from "@/components/sales/types";
-
-export const menuItems: MenuItem[] = [
+export const menuItems = [
   // Minuman - Rp6,000.00
   { name: "Tora Bika Cappuccino", price: 6000, category: "minuman" },
   { name: "Milo", price: 6000, category: "minuman" },
