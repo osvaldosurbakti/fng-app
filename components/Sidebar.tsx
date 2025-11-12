@@ -1,3 +1,4 @@
+// components/Sidebar.tsx (update bagian menuItems)
 'use client'
 
 import Link from 'next/link'
@@ -8,6 +9,7 @@ import {
   BarChart3, 
   Package,
   Users,
+  ClipboardList, // Icon untuk orders
   X
 } from 'lucide-react'
 
@@ -29,6 +31,7 @@ export default function Sidebar({ onClose, isMobile = false }: SidebarProps) {
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Penjualan', href: '/dashboard/sales', icon: ShoppingCart },
     { name: 'Produk', href: '/dashboard/products', icon: Package },
+    { name: 'Orders', href: '/dashboard/orders', icon: ClipboardList }, // Menu baru
     { name: 'Laporan', href: '/dashboard/reports', icon: BarChart3 },
     { name: 'Customer', href: '/dashboard/customers', icon: Users },
   ]
@@ -84,7 +87,6 @@ export default function Sidebar({ onClose, isMobile = false }: SidebarProps) {
           })}
         </div>
       </nav>
-
     </div>
   )
 }

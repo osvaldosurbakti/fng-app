@@ -1,6 +1,8 @@
+// lib/mongodb.ts
 import { MongoClient, MongoClientOptions } from 'mongodb'
 
-const uri = process.env.MONGODB_URI!
+// Gunakan connection string yang lebih spesifik
+const uri = process.env.MONGODB_URI || 'mongodb+srv://osvaldo12:osvaldo12@cluster0.o7kicie.mongodb.net/fng-login?retryWrites=true&w=majority&appName=Cluster0'
 
 if (!uri) {
   throw new Error('Please define the MONGODB_URI environment variable')
@@ -8,52 +10,84 @@ if (!uri) {
 
 const options: MongoClientOptions = {
   maxPoolSize: 10,
-  serverSelectionTimeoutMS: 10000, // Increase timeout
+  serverSelectionTimeoutMS: 15000, // Increase timeout
   socketTimeoutMS: 45000,
-  connectTimeoutMS: 10000,
+  connectTimeoutMS: 15000,
   retryWrites: true,
   retryReads: true,
-  // Tambahan options untuk stability
   maxIdleTimeMS: 30000,
   minPoolSize: 1,
+  ssl: true,
+  authSource: 'admin',
+  // Tambahan untuk stability
+  heartbeatFrequencyMS: 10000,
+  maxStalenessSeconds: 90
 }
 
 let client: MongoClient
 let clientPromise: Promise<MongoClient>
 let isConnected = false
+let connectionAttempts = 0
+const MAX_RETRY_ATTEMPTS = 3
 
 // Function untuk check koneksi health
 async function testConnection(client: MongoClient): Promise<boolean> {
   try {
     await client.db('admin').command({ ping: 1 })
+    console.log('✅ MongoDB connection test successful')
     return true
   } catch (error) {
-    console.error('MongoDB connection test failed:', error)
+    console.error('❌ MongoDB connection test failed:', error)
     return false
   }
 }
 
+// Function untuk initialize connection dengan retry
+async function initializeConnection(): Promise<MongoClient> {
+  try {
+    console.log(`🔌 Attempting MongoDB connection (attempt ${connectionAttempts + 1})...`)
+    connectionAttempts++
+    
+    client = new MongoClient(uri, options)
+    const connectedClient = await client.connect()
+    
+    isConnected = await testConnection(connectedClient)
+    if (isConnected) {
+      console.log('✅ MongoDB connected successfully')
+      connectionAttempts = 0 // Reset counter on success
+      return connectedClient
+    } else {
+      throw new Error('Connection test failed')
+    }
+  } catch (error) {
+    console.error(`❌ MongoDB connection attempt ${connectionAttempts} failed:`, error)
+    
+    if (connectionAttempts < MAX_RETRY_ATTEMPTS) {
+      console.log(`🔄 Retrying connection in 2 seconds... (${MAX_RETRY_ATTEMPTS - connectionAttempts} attempts left)`)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      return initializeConnection()
+    } else {
+      console.error('❌ All MongoDB connection attempts failed')
+      throw error
+    }
+  }
+}
+
 if (process.env.NODE_ENV === 'development') {
-  // In development mode, use a global variable so that the value
-  // is preserved across module reloads caused by HMR (Hot Module Replacement).
   let globalWithMongo = global as typeof globalThis & {
     _mongoClientPromise?: Promise<MongoClient>
     _mongoConnectionStatus?: boolean
   }
 
   if (!globalWithMongo._mongoClientPromise) {
-    console.log('🔌 Initializing MongoDB connection...')
-    client = new MongoClient(uri, options)
-    
-    globalWithMongo._mongoClientPromise = client.connect()
-      .then(async (connectedClient) => {
-        console.log('✅ MongoDB connected successfully')
-        isConnected = await testConnection(connectedClient)
-        globalWithMongo._mongoConnectionStatus = isConnected
+    globalWithMongo._mongoClientPromise = initializeConnection()
+      .then((connectedClient) => {
+        isConnected = true
+        globalWithMongo._mongoConnectionStatus = true
         return connectedClient
       })
       .catch((error) => {
-        console.error('❌ MongoDB connection failed:', error)
+        console.error('❌ Final MongoDB connection failed:', error)
         isConnected = false
         globalWithMongo._mongoConnectionStatus = false
         throw error
@@ -63,27 +97,22 @@ if (process.env.NODE_ENV === 'development') {
   clientPromise = globalWithMongo._mongoClientPromise
   isConnected = globalWithMongo._mongoConnectionStatus || false
 } else {
-  // In production mode, it's best to not use a global variable.
-  console.log('🔌 Initializing MongoDB connection...')
-  client = new MongoClient(uri, options)
-  clientPromise = client.connect()
-    .then(async (connectedClient) => {
-      console.log('✅ MongoDB connected successfully')
-      isConnected = await testConnection(connectedClient)
+  // Production
+  clientPromise = initializeConnection()
+    .then((connectedClient) => {
+      isConnected = true
       return connectedClient
     })
     .catch((error) => {
-      console.error('❌ MongoDB connection failed:', error)
+      console.error('❌ Final MongoDB connection failed:', error)
       isConnected = false
       throw error
     })
 }
 
-// Export a module-scoped MongoClient promise. By doing this in a
-// separate module, the client can be shared across functions.
+// Export functions
 export const getMongoClient = () => clientPromise
 
-// Export connection status checker
 export const checkConnection = async (): Promise<boolean> => {
   if (!isConnected) {
     return false
@@ -99,13 +128,12 @@ export const checkConnection = async (): Promise<boolean> => {
   }
 }
 
-// Export function untuk mendapatkan connection status
 export const getConnectionStatus = (): boolean => isConnected
 
-// Export function untuk reconnect manual
 export const reconnect = async (): Promise<boolean> => {
   try {
     console.log('🔄 Attempting to reconnect to MongoDB...')
+    connectionAttempts = 0 // Reset counter
     
     if (process.env.NODE_ENV === 'development') {
       let globalWithMongo = global as typeof globalThis & {
@@ -115,28 +143,27 @@ export const reconnect = async (): Promise<boolean> => {
       
       // Close existing connection jika ada
       if (globalWithMongo._mongoClientPromise) {
-        const oldClient = await globalWithMongo._mongoClientPromise
-        await oldClient.close()
+        try {
+          const oldClient = await globalWithMongo._mongoClientPromise
+          await oldClient.close()
+        } catch (error) {
+          console.log('No existing connection to close')
+        }
       }
       
       // Create new connection
-      client = new MongoClient(uri, options)
-      globalWithMongo._mongoClientPromise = client.connect()
-        .then(async (connectedClient) => {
-          console.log('✅ MongoDB reconnected successfully')
-          isConnected = await testConnection(connectedClient)
-          globalWithMongo._mongoConnectionStatus = isConnected
+      globalWithMongo._mongoClientPromise = initializeConnection()
+        .then((connectedClient) => {
+          isConnected = true
+          globalWithMongo._mongoConnectionStatus = true
           return connectedClient
         })
       
       clientPromise = globalWithMongo._mongoClientPromise
     } else {
-      // Untuk production, buat connection baru
-      client = new MongoClient(uri, options)
-      clientPromise = client.connect()
-        .then(async (connectedClient) => {
-          console.log('✅ MongoDB reconnected successfully')
-          isConnected = await testConnection(connectedClient)
+      clientPromise = initializeConnection()
+        .then((connectedClient) => {
+          isConnected = true
           return connectedClient
         })
     }
@@ -149,3 +176,6 @@ export const reconnect = async (): Promise<boolean> => {
     return false
   }
 }
+
+// Export default untuk kompatibilitas
+export default clientPromise
