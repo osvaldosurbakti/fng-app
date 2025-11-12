@@ -1,9 +1,9 @@
 // lib/auth.ts
-import NextAuth from 'next-auth';
+import NextAuth, { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import jwt from 'jsonwebtoken';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       id: 'cross-app-token',
@@ -11,7 +11,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         token: { label: 'Token', type: 'string' }
       },
-      async authorize(credentials) {
+      async authorize(credentials: any) {
         try {
           if (!credentials?.token) {
             console.log('No token provided');
@@ -47,14 +47,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.role = user.role;
         token.id = user.id;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: any }) {
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
@@ -63,11 +63,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }
   },
   pages: {
-    signIn: '/auth/callback', // Custom callback page
-    error: '/auth/error'
+    signIn: '/auth/callback',
   },
   session: {
-    strategy: 'jwt',
+    strategy: 'jwt' as const, // Tambahkan 'as const' untuk type safety
     maxAge: 24 * 60 * 60, // 24 hours
   }
-});
+};
+
+export default NextAuth(authOptions);
+export { authOptions };
